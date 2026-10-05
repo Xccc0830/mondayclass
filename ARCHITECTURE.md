@@ -1,147 +1,110 @@
-# 系統架構與工程規範
+# 高階系統架構與工程規範
 
 ## 1. 核心技術棧
 
 | 領域 | 技術與說明 |
 | --- | --- |
-| 前端框架與建置工具 | React 18+、Vite |
+| 全端框架 | Next.js 14+，使用 App Router |
 | 程式語言 | TypeScript Strict Mode；禁止使用 `any` |
-| 樣式與圖標 | Tailwind CSS、Lucide React |
-| 資料來源 | Mock Data；使用前端模擬資料與非同步 API 模擬函式 |
-| 後端服務規範 | Supabase（相關整合與安全規範見下文） |
-| 資料庫 | PostgreSQL；所有資料表均須啟用 Row Level Security（RLS） |
-| 身分驗證 | Supabase Authentication；支援 Email/Password 與 OAuth |
-| 檔案儲存 | Supabase Storage；儲存靜態檔案與圖片 |
-| 資料庫 SDK | `@supabase/supabase-js` |
-| 狀態管理 | React Custom Hooks 與 React Context API；全域狀態範例：`AuthContext` |
+| 樣式與 UI 元件 | Tailwind CSS、Lucide React |
+| 後端與資料庫（BaaS） | Supabase、PostgreSQL；資料表必須啟用 Row Level Security（RLS） |
+| 身分驗證 | Supabase Authentication，透過伺服器端 SSR 與 Cookie 管理工作階段 |
+| Supabase 套件 | `@supabase/ssr`、`@supabase/supabase-js` |
 
 ## 2. 目錄結構與職責
 
 ```text
 ├── .github/
-│   └── copilot-instructions.md    # AI Agent 輕量級提示指令（10 行以內）
-├── public/                        # 靜態資源（Favicon、Manifest 等）
-├── src/
-│   ├── assets/                    # 專案內部靜態檔案（圖片、字型）
-│   ├── components/                # 介面元件
-│   │   ├── ui/                    # 基礎元件（Button、Input、Card、Modal、Badge）
-│   │   ├── common/                # 全站共用版型（Header、Footer、Sidebar、Layout）
-│   │   └── features/              # 依業務功能分群的元件
-│   │       ├── auth/              # 登入與註冊表單元件
-│   │       └── [feature_name]/    # 功能介面（如 ProductCard、PostList）
-│   ├── context/                   # React Context 全域狀態（如 AuthContext.tsx）
-│   ├── hooks/                     # 自訂 React Hooks，封裝 UI 邏輯與資料對接
-│   │   ├── useAuth.ts             # 使用者登入狀態 Hook
-│   │   └── use[Feature].ts        # 業務資料操作 Hook
-│   ├── lib/                       # 第三方服務初始化設定
-│   │   └── supabase.ts            # Supabase Client 初始化（僅限 Client/Anon Key）
-│   ├── pages/                     # 頁面級元件，對應路由主畫面
-│   ├── services/                  # Supabase API 與資料庫讀寫（CRUD 原子函式）
-│   │   ├── authService.ts         # 身分驗證服務
-│   │   └── [feature]Service.ts    # 各資料表的 CRUD 操作
-│   ├── types/                     # 全域 TypeScript 型別定義
-│   │   ├── database.types.ts      # Supabase CLI 產生的資料庫 Schema 型別
-│   │   └── index.ts               # 前端頁面與 View Model 型別
-│   ├── utils/                     # 共用工具函式與格式化工具
-│   │   ├── formatters.ts          # 日期、金額等格式化函式
-│   │   └── constants.ts           # 全域常數
-│   ├── App.tsx                    # 應用程式入口與路由設定
-│   ├── main.tsx                   # React DOM 渲染入口
-│   └── index.css                 # 全域樣式與 Tailwind CSS 載入點
+│   └── copilot-instructions.md    # AI Agent 輕量級提示指令
+├── app/                           # Next.js App Router 主目錄
+│   ├── (auth)/                    # 身分驗證路由群組（登入、註冊）
+│   ├── (dashboard)/               # 需登入才能存取的頁面群組
+│   │   ├── layout.tsx             # 受保護頁面的共用版型與驗證檢查
+│   │   └── page.tsx               # 主儀表板（Server Component）
+│   ├── api/                       # Route Handlers（如 Webhook 或 REST API）
+│   ├── favicon.ico
+│   ├── globals.css                # Tailwind CSS 全域樣式
+│   ├── layout.tsx                 # Root Layout
+│   └── page.tsx                   # 專案首頁
+├── components/                    # 共用與功能元件
+│   ├── ui/                        # 基礎 UI 元件（Button、Input、Card、Modal）
+│   ├── common/                    # 全站共用版型元件（Header、Footer、Sidebar）
+│   └── features/                  # 依業務功能分類的 Client／Server 元件
+│       └── [feature_name]/
+├── actions/                       # Next.js Server Actions，處理資料異動
+│   └── [feature]Actions.ts        # INSERT、UPDATE、DELETE 等操作
+├── lib/                           # 第三方套件與 Supabase 工廠函式
+│   └── supabase/
+│       ├── client.ts              # Browser Client，供 Client Component 使用
+│       ├── server.ts              # Server Client，供伺服器端程式使用
+│       └── middleware.ts          # Middleware 使用的 Client
+├── middleware.ts                  # 工作階段更新與路由驗證
+├── types/                         # 全域 TypeScript 型別定義
+│   ├── database.types.ts          # Supabase CLI 產生的 Schema 型別
+│   └── index.ts                   # 共用型別
+├── utils/                         # 共用工具函式與格式化工具
 ├── .env.example                   # 環境變數範例
-├── .gitignore                     # Git 忽略規則
-├── index.html                     # HTML 骨架
-├── package.json                   # 專案套件依賴與指令
-├── tailwind.config.js             # Tailwind CSS 設定
-├── tsconfig.json                  # TypeScript 嚴格模式設定
-└── vite.config.ts                 # Vite 建置與路徑別名設定
+├── .gitignore
+├── next.config.mjs                # Next.js 設定
+├── package.json
+├── tailwind.config.ts
+└── tsconfig.json
 ```
 
 ## 3. 架構設計原則
 
-### 3.1 職責分離
+### 3.1 優先使用 React Server Components
 
-- **`components/`（UI 展示層）：** 接收 props、渲染介面並發出事件。不得直接呼叫 `supabase.from(...)` 或撰寫複雜商業邏輯。
-- **`services/`（資料處理層）：** 直接呼叫 Supabase SDK 執行 CRUD 操作，例如 `supabase.from('posts').select('*')`。查詢與回傳值必須使用強型別。
-- **`hooks/`（狀態與邏輯層）：** 呼叫 `services/` 取得資料，並使用 React 狀態與副作用處理非同步狀態（如 `loading`、`error`、`data`），再提供給 `pages/` 或 `components/` 使用。
+- `app/` 中的頁面與元件預設為 Server Components，資料讀取可在伺服器端直接執行，通常不需要透過 `useEffect` 或 `useState` 載入資料。
+- 只有需要互動功能（例如事件處理、表單輸入狀態或 `useContext`）時，才在檔案頂端加入 `'use client'`。
 
-## 4. Supabase 資料庫與安全規範
+### 3.2 分離資料讀取與異動
 
-### 4.1 金鑰與環境變數
+- **資料查詢：** 在 Server Component 中建立 Supabase Server Client，以 `async`／`await` 查詢資料並在伺服器端預先渲染。
+- **資料異動：** 新增、更新與刪除操作透過 `actions/` 中的 Server Actions 處理。完成後視需求使用 `revalidatePath` 或 `revalidateTag` 更新快取。
+- **安全性：** 不得將伺服器專用金鑰或具權限的寫入邏輯暴露給用戶端。
 
-專案根目錄應提供 `.env.local` 作為本機環境設定，並確認該檔案已加入 `.gitignore`，不得提交至版本控制。`.env.example` 僅放置範例值：
+## 4. Supabase SSR 與身分驗證
 
-```dotenv
-VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-public-key
-```
+### 4.1 Cookie 工作階段
 
-前端只能使用公開的 `ANON_KEY`。禁止在前端寫入或使用 `SUPABASE_SERVICE_ROLE_KEY`，以免洩漏資料庫管理權限。
+使用 `@supabase/ssr` 管理伺服器端與瀏覽器端共用的 Supabase 工作階段。依照執行環境，在 Server Component、Server Actions 與 Middleware 中建立對應的 Supabase Client，並透過 Cookie 讀取或更新工作階段。
 
-### 4.2 行級安全政策（RLS）
+### 4.2 路由驗證
 
-- Supabase 中的所有資料表都必須啟用 RLS。
-- `SELECT`、`INSERT`、`UPDATE`、`DELETE` 政策必須依據 `auth.uid()` 限制存取權限。
-- 不得開放未受保護的公開寫入權限。
+根目錄的 `middleware.ts` 可用來更新工作階段，並依路由規則導向未登入的使用者。受保護路由（例如 `/dashboard/*`）仍須在伺服器端確認使用者身分與資料存取權限；不可只依賴用戶端檢查。
 
-### 4.3 強型別對接
+## 5. 在地化與繁體中文（台灣）用語
 
-所有 Supabase Client 都必須載入資料庫 Schema 型別：
+所有使用者可見的介面文字與錯誤提示，必須使用繁體中文及台灣慣用詞。程式碼註解也使用繁體中文。
 
-```typescript
-// src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database.types';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
-```
-
-## 5. UI、樣式與響應式規範
-
-- **Mobile-First 響應式設計：** 所有介面都必須適用於行動裝置與桌面端，並使用 Tailwind CSS 斷點前綴（如 `md:`、`lg:`）。
-- **圖標：** 全站統一使用 `lucide-react`，維持視覺一致性。
-- **樣式組合：** 條件式 class 應保持清楚，避免過長或重複的 class 字串。
-- **元件重用：** 將重複使用的基礎元件整理至 `src/components/ui/`。
-
-## 6. 在地化與繁體中文（台灣）用語
-
-所有使用者可見文字，包括按鈕、提示、表單驗證、彈窗訊息與 Toast，都必須使用繁體中文（台灣慣用詞）。不得使用簡體中文或中國大陸用語。
-
-| 必須使用 | 避免使用 |
+| 建議使用 | 避免使用 |
 | --- | --- |
 | 使用者／會員 | 用戶 |
 | 登入／登出 | 登錄／退出 |
 | 設定 | 設置 |
 | 專案 | 項目 |
 | 預設 | 默認 |
-| 支援 | 支持 |
 | 資訊 | 信息 |
-| 上傳／下載 | 上載／下載 |
 | 連結 | 鏈接 |
-| 建立 | 創建 |
-| 確認／送出 | 提交／確定 |
-| 螢幕 | 屏幕 |
-| 程式／軟體 | 程序／軟件 |
-| 記憶體 | 內存 |
+| 建立／繪製 | 創建／渲染 |
 
-## 7. Git 提交與分支規範
+## 6. Git 提交規範
 
-### 7.1 Commit Message
-
-Commit Message 必須遵循 Conventional Commits 格式：
+Commit Message 遵循 Conventional Commits 格式：
 
 | 前綴 | 用途 |
 | --- | --- |
 | `feat:` | 新增功能 |
-| `fix:` | 修復 Bug |
-| `docs:` | 修改文件（如 README、ARCHITECTURE） |
-| `style:` | 調整程式碼格式或 UI 樣式，不影響邏輯 |
-| `refactor:` | 重構程式碼 |
-| `test:` | 新增或修改測試 |
+| `fix:` | 修復錯誤 |
+| `docs:` | 修改文件 |
+| `style:` | 調整 UI 樣式或程式碼格式，不影響邏輯 |
+| `refactor:` | 重構程式碼或架構（例如將 Client Component 改為 Server Component） |
 
-### 7.2 提交安全檢查
+## 7. 可延伸的程式碼範例
 
-Push 前確認沒有將 `.env` 檔案、API Keys 或個人金鑰加入版本控制。
+如有需要，可再補充以下範例：
+
+- `lib/supabase/` 中的 Browser、Server 與 Middleware Client 設定。
+- 在 Server Component 中向 Supabase 查詢資料並呈現的範例。
+- 使用 Server Actions 處理表單提交與 Supabase 資料寫入的範例。

@@ -1,10 +1,9 @@
 # Project Instructions
-- Stack: React (Vite), TypeScript (Strict), Tailwind CSS, Lucide React, Supabase (Auth & DB).
-- Structure: Pages in `src/pages/`, UI in `src/components/ui/`, feature components in `src/components/features/`, Supabase client in `src/lib/supabase.ts`.
+- Stack: Next.js 14+ (App Router), TypeScript (Strict), Tailwind CSS, Lucide React, Supabase (@supabase/ssr).
+- Structure: Routes in `app/`, UI components in `components/ui/`, feature components in `components/features/`, Supabase SSR clients in `lib/supabase/`.
+- Component Strategy: Default to Server Components; explicitly use 'use client' only for interactive UI logic.
 - UI & Style: Clean Tailwind classes; strictly responsive and mobile-friendly; keep styling consistent.
 - Localization: UI text and comments must use Traditional Chinese (zh-TW, Taiwan phrasing: 使用者 not 用戶, 專案 not 項目).
 - Code Quality: Clean functional components with explicit TypeScript interfaces; strictly forbid `any`.
-- Supabase Rules: Fetch data via Supabase JS client inside custom hooks (`src/hooks/`); generate DB types from Supabase CLI.
-- Logic & State: Keep UI presentational; extract business logic and DB queries to `src/services/` or `src/hooks/`.
-- Git Commits: Follow standard commit prefixes (`feat:`, `fix:`, `style:`, `refactor:`, `docs:`).
-- Security & Safety: Only use ANON key in frontend; NEVER commit service role keys or `.env` files.
+- Supabase Rules: Use Server Clients/Server Actions for data fetching and mutations; use Browser Client only for client components.
+- Security & Safety: Protect routes via Middleware; enforce RLS; only expose ANON key; NEVER commit service role keys or `.env` files.
