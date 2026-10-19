@@ -1,4 +1,6 @@
-# 高階系統架構與工程規範
+# 系統架構與工程規範
+
+本文件定義健身教練平台的技術架構與領域邊界。功能與驗收依據以 [USERSTORY.md](./USERSTORY.md) 為準；若需求變更，應同步更新兩份文件。
 
 ## 1. 核心技術棧
 
@@ -7,76 +9,125 @@
 | 全端框架 | Next.js 14+，使用 App Router |
 | 程式語言 | TypeScript Strict Mode；禁止使用 `any` |
 | 樣式與 UI 元件 | Tailwind CSS、Lucide React |
-| 後端與資料庫（BaaS） | Supabase、PostgreSQL；資料表必須啟用 Row Level Security（RLS） |
+| 後端與資料庫 | Supabase、PostgreSQL；所有資料表啟用並設定 Row Level Security（RLS） |
 | 身分驗證 | Supabase Authentication，透過伺服器端 SSR 與 Cookie 管理工作階段 |
 | Supabase 套件 | `@supabase/ssr`、`@supabase/supabase-js` |
+| 檔案儲存 | Supabase Storage；餐點照片與資格文件使用不同存取政策，資格文件存放於私有 Bucket |
 
 ## 2. 目錄結構與職責
 
 ```text
-├── .github/
-│   └── copilot-instructions.md    # AI Agent 輕量級提示指令
-├── app/                           # Next.js App Router 主目錄
-│   ├── (auth)/                    # 身分驗證路由群組（登入、註冊）
-│   ├── (dashboard)/               # 需登入才能存取的頁面群組
-│   │   ├── layout.tsx             # 受保護頁面的共用版型與驗證檢查
-│   │   └── page.tsx               # 主儀表板（Server Component）
-│   ├── api/                       # Route Handlers（如 Webhook 或 REST API）
-│   ├── favicon.ico
-│   ├── globals.css                # Tailwind CSS 全域樣式
-│   ├── layout.tsx                 # Root Layout
-│   └── page.tsx                   # 專案首頁
-├── components/                    # 共用與功能元件
-│   ├── ui/                        # 基礎 UI 元件（Button、Input、Card、Modal）
-│   ├── common/                    # 全站共用版型元件（Header、Footer、Sidebar）
-│   └── features/                  # 依業務功能分類的 Client／Server 元件
-│       └── [feature_name]/
-├── actions/                       # Next.js Server Actions，處理資料異動
-│   └── [feature]Actions.ts        # INSERT、UPDATE、DELETE 等操作
-├── lib/                           # 第三方套件與 Supabase 工廠函式
-│   └── supabase/
-│       ├── client.ts              # Browser Client，供 Client Component 使用
-│       ├── server.ts              # Server Client，供伺服器端程式使用
-│       └── middleware.ts          # Middleware 使用的 Client
-├── middleware.ts                  # 工作階段更新與路由驗證
-├── types/                         # 全域 TypeScript 型別定義
-│   ├── database.types.ts          # Supabase CLI 產生的 Schema 型別
-│   └── index.ts                   # 共用型別
-├── utils/                         # 共用工具函式與格式化工具
-├── .env.example                   # 環境變數範例
-├── .gitignore
-├── next.config.mjs                # Next.js 設定
+├── app/
+│   ├── (auth)/                     # 登入、註冊與身分驗證
+│   ├── (student)/                  # 學員健康檔案、打卡、教練瀏覽、預約
+│   ├── (trainer)/                  # 教練學員、課表與營養計畫、排程、回饋
+│   ├── (admin)/                    # 資格審核、平台營運儀表板
+│   ├── api/                        # Webhook 等需使用 Route Handler 的端點
+│   ├── layout.tsx
+│   └── page.tsx
+├── actions/                        # 按領域拆分的 Server Actions
+│   ├── profileActions.ts
+│   ├── checkinActions.ts
+│   ├── bookingActions.ts
+│   ├── planActions.ts
+│   ├── scheduleActions.ts
+│   └── reviewActions.ts
+├── components/
+│   ├── ui/                         # 共用基礎元件
+│   ├── common/                     # 全站版型元件
+│   └── features/                   # 按 profile、checkins、booking 等領域拆分
+├── lib/
+│   ├── supabase/                   # Browser、Server、Middleware Clients
+│   ├── domain/                     # 無 UI 的計算與領域規則（如 BMR、TDEE）
+│   └── analytics/                  # 儀表板指標查詢與日期區間處理
+├── middleware.ts                   # 工作階段更新與路由初步驗證
+├── types/
+│   ├── database.types.ts           # Supabase CLI 產生的資料庫型別
+│   └── index.ts
+├── supabase/
+│   ├── migrations/                 # Schema、RLS、索引與資料庫函式
+│   └── seed.sql
+├── .env.example
 ├── package.json
-├── tailwind.config.ts
 └── tsconfig.json
 ```
 
-## 3. 架構設計原則
+以上是建議的職責邊界，不要求尚未實作的路由或檔案先行存在。功能頁面預設採用 Server Component；互動表單與日曆等必要區域才使用 Client Component。
 
-### 3.1 優先使用 React Server Components
+## 3. 領域模組與資料模型
 
-- `app/` 中的頁面與元件預設為 Server Components，資料讀取可在伺服器端直接執行，通常不需要透過 `useEffect` 或 `useState` 載入資料。
-- 只有需要互動功能（例如事件處理、表單輸入狀態或 `useContext`）時，才在檔案頂端加入 `'use client'`。
+資料表名稱可依實作調整，但需保留以下實體、關聯與資料責任。每筆使用者資料均應有明確擁有者與建立／更新時間；適用的資料表應加入索引、外鍵、唯一性及狀態檢查。
 
-### 3.2 分離資料讀取與異動
+| 領域 | 核心資料與關聯 |
+| --- | --- |
+| 身分與角色 | `profiles` 關聯 Supabase Auth 使用者；角色為學員、教練或管理者。角色由可信任的伺服器端流程管理，不允許使用者自行提升權限。 |
+| 健康檔案與目標 | 學員的身高、體重、體脂率、年齡、生理性別、活動量、健身目標、運動偏好、飲食限制及個人每日熱量／營養素目標。個人健康資料只供本人及具有效指導關係且獲授權的教練存取。 |
+| 教練資料與審核 | 教練公開資料、專長、課程項目、價格、時長、審核申請、審核意見及證照文件中繼資料。審核狀態為待審核、需補件、已通過或未通過。 |
+| 指導關係 | 學員與教練的有效指派／指導關係，用於授權教練查看學員打卡及建立個人課表、營養計畫。 |
+| 打卡 | 學員每日飲食紀錄、運動紀錄、照片中繼資料、教練回饋及點讚。紀錄日期依平台時區解讀；每筆紀錄由建立者擁有。 |
+| 訓練與營養計畫 | 動作庫、教練建立的訓練課表及動作項目、指定學員的每日營養計畫。草稿與已發布版本須可區分，並保留計畫的適用日期。 |
+| 排程與預約 | 教練每週重複可預約時段、例外不可預約時段、預約、取消／改期申請及處理結果。預約保存教練、學員、課程、起訖時間、時區、價格快照及狀態。 |
+| 付款與平台統計 | 付款交易、退款、交易成立時的幣別及平台抽成比例快照。統計讀取預約、打卡、教練審核狀態與付款資料，不讓管理儀表板繞過授權或直接讀取不必要的個人健康細節。 |
 
-- **資料查詢：** 在 Server Component 中建立 Supabase Server Client，以 `async`／`await` 查詢資料並在伺服器端預先渲染。
-- **資料異動：** 新增、更新與刪除操作透過 `actions/` 中的 Server Actions 處理。完成後視需求使用 `revalidatePath` 或 `revalidateTag` 更新快取。
-- **安全性：** 不得將伺服器專用金鑰或具權限的寫入邏輯暴露給用戶端。
+## 4. 領域規則與關鍵流程
 
-## 4. Supabase SSR 與身分驗證
+### 4.1 健康數值與每日目標
 
-### 4.1 Cookie 工作階段
+- BMR 使用 Mifflin-St Jeor 公式，依學員輸入的身高（公分）、體重（公斤）、年齡與生理性別計算；TDEE 為 BMR 乘以 US-01 定義的活動係數。結果以 kcal/日顯示並取整數。缺少必要資料時回報缺漏欄位，不產生估算值。
+- 計算邏輯放在 `lib/domain/` 的純函式中，可單元測試，不依賴 UI 或資料庫。輸入與輸出均須驗證單位及有效範圍。
+- 每日目標優先序為：當日有效且已發布的教練營養計畫，其次為學員個人目標；均不存在時回傳未設定，不以 TDEE 代替目標。
+- 教練以熱量及三大營養素百分比建立計畫；發布前驗證比例合計為 100%，並按碳水化合物及蛋白質每公克 4 kcal、脂肪每公克 9 kcal 換算每日克數目標。
+- 打卡達成率以當日已記錄總量除以相應目標計算。目標缺漏或為零時標示未設定；實際比例可以高於 100%。打卡異動後應更新當日彙總。
 
-使用 `@supabase/ssr` 管理伺服器端與瀏覽器端共用的 Supabase 工作階段。依照執行環境，在 Server Component、Server Actions 與 Middleware 中建立對應的 Supabase Client，並透過 Cookie 讀取或更新工作階段。
+### 4.2 教練資格、搜尋與指導權限
 
-### 4.2 路由驗證
+- 只有已通過資格審核且公開的教練會出現在學員搜尋結果，並可接受新預約。教練可查看自身審核狀態與意見；需補件時可重新提交，歷次審核結果須保留。
+- 管理者可要求補件、通過或拒絕申請；審核狀態變更及意見需保留可追蹤紀錄。
+- 教練僅能查看與其存在有效指導關係的學員資料與打卡。學員可查看自己的紀錄與該紀錄上的教練回饋；回饋及點讚須綁定教練、學員紀錄與建立時間。
 
-根目錄的 `middleware.ts` 可用來更新工作階段，並依路由規則導向未登入的使用者。受保護路由（例如 `/dashboard/*`）仍須在伺服器端確認使用者身分與資料存取權限；不可只依賴用戶端檢查。
+### 4.3 可預約時段與預約狀態
 
-## 5. 在地化與繁體中文（台灣）用語
+- 重複可預約時段以星期、起訖時間、適用期間及時區定義；例外不可預約時段可覆蓋重複時段。已預約時段不可再次開放或被第二筆有效預約占用。
+- 建立與改期須在資料庫交易中再次驗證時段可用並原子化寫入，避免並行請求造成重複預約；應以資料庫約束或具等效保證的交易邏輯防止時間重疊。
+- 預約保存明確狀態及起訖時間。學員提交取消／改期申請後，原預約維持有效直到教練處理；同意取消才取消預約，同意改期前再次確認新時段可用。拒絕時保留原行程並保存原因（若有）。
+- 雙方行事曆以同一平台設定時區顯示；資料庫以具時區的時間戳記保存時刻，另保留顯示／排程所需的時區識別。
 
-所有使用者可見的介面文字與錯誤提示，必須使用繁體中文及台灣慣用詞。程式碼註解也使用繁體中文。
+### 4.4 營運指標
+
+- 儀表板日期區間依平台設定時區解讀，並對各指標採用明確的日期依據。
+- 預約總數及完成課程數按課程開始時間計算；總數包含待處理及已確認狀態，排除已取消及遭拒絕，完成數只計已完成課程。
+- 活躍學員為期間內至少有一筆未取消／未拒絕的預約或飲食／運動打卡的學員。教練人數為期間結束日仍公開且審核通過的教練去重數。
+- 總交易額與抽成按付款成功時間計算，只納入截至查詢時未退款的課程付款；抽成採用交易成立時的比例快照。金額統一以平台結算幣別呈現，無資料時回傳 0。
+- 儀表板查詢須在伺服器端執行並限制管理者存取；若後續使用彙總表或快取，必須保持上述定義一致並正確處理資料更新及退款。
+
+## 5. 身分驗證、授權與資料安全
+
+- Supabase Auth 負責驗證；`middleware.ts` 用於更新 Cookie 工作階段及初步導向，不作為唯一授權機制。Server Component、Server Action、Route Handler 及資料庫 RLS 均須執行必要的身分與資源授權檢查。
+- 所有資料表啟用 RLS，按角色、資料擁有者、有效指導關係、預約參與者及管理權限訂定最小權限政策。前端隱藏功能不能取代伺服器端與 RLS 授權。
+- 管理者權限只能由受信任的伺服器端管理流程授予。不可依賴用戶端提交的角色、教練審核狀態、價格、抽成比例或預約狀態作為可信資料。
+- 資格文件存放於私有 Storage Bucket；下載須經授權檢查及短效簽署連結，不得公開 Bucket 或將永久公開網址提供給未授權者。餐點照片的讀取權限也須遵循學員分享設定與教練指導關係。
+- 瀏覽器端僅可使用 Supabase ANON key；不得將 Service Role Key、付款機密或其他伺服器專用金鑰傳送至用戶端或提交至版本控制。
+- Server Actions 驗證輸入、使用者身分及資源權限，明確回報驗證／授權／衝突錯誤；成功後依受影響頁面呼叫 `revalidatePath` 或 `revalidateTag`。
+
+## 6. Next.js 與 Supabase 存取方式
+
+### 6.1 React Server Components
+
+- 頁面預設使用 Server Components，直接透過 Supabase Server Client 查詢目前使用者有權存取的資料。
+- 表單狀態、互動式日曆及即時互動等必要區域才使用 `'use client'`；不得在用戶端重複載入本可在伺服器取得的初始資料。
+
+### 6.2 資料讀取與異動
+
+- 一般查詢由 Server Component 或專用伺服器端查詢模組處理；資料異動由領域 Server Actions 處理。
+- 預約建立／改期等需併發安全的流程應由資料庫交易或受控的 Postgres 函式執行，Server Action 負責驗證使用者並呼叫該流程。
+- 付款狀態等外部事件只可由驗證過的伺服器端 Webhook 更新；不可相信瀏覽器回傳的付款成功結果。付款服務供應商由實作階段另行選定。
+- 使用 Supabase CLI 產生 `types/database.types.ts`，Schema 變更以 migration 管理，並在遷移中同步調整 RLS、約束及索引。
+
+## 7. 在地化與時間、單位規範
+
+- 所有使用者可見的文字、錯誤提示與程式碼註解使用繁體中文及台灣慣用詞。
+- 使用者輸入與介面顯示需清楚標示身高公分、體重公斤、體脂百分比、熱量 kcal、營養素公克、運動分鐘、重量公斤及金額幣別。
+- 平台時區及結算幣別由明確的伺服器端設定提供，不得依賴執行主機的預設值。日期區間查詢須先按平台時區轉換為時間範圍，再查詢資料。
 
 | 建議使用 | 避免使用 |
 | --- | --- |
@@ -87,9 +138,16 @@
 | 預設 | 默認 |
 | 資訊 | 信息 |
 | 連結 | 鏈接 |
-| 建立／繪製 | 創建／渲染 |
+| 建立 | 創建 |
 
-## 6. Git 提交規範
+## 8. 驗證要求
+
+- BMR/TDEE 與營養素換算須涵蓋公式、活動係數、取整、缺少輸入及無效輸入的單元測試。
+- 預約流程須驗證重疊時段、並行預約、改期時段衝突、同意／拒絕後的狀態與行事曆結果。
+- RLS 須驗證學員、教練、管理者的允許與拒絕存取案例，特別是學員健康資料、教練資格文件及管理儀表板。
+- 儀表板須以含邊界日期、不同狀態、退款、不同抽成快照及空資料集的案例驗證指標。
+
+## 9. Git 提交規範
 
 Commit Message 遵循 Conventional Commits 格式：
 
@@ -99,12 +157,4 @@ Commit Message 遵循 Conventional Commits 格式：
 | `fix:` | 修復錯誤 |
 | `docs:` | 修改文件 |
 | `style:` | 調整 UI 樣式或程式碼格式，不影響邏輯 |
-| `refactor:` | 重構程式碼或架構（例如將 Client Component 改為 Server Component） |
-
-## 7. 可延伸的程式碼範例
-
-如有需要，可再補充以下範例：
-
-- `lib/supabase/` 中的 Browser、Server 與 Middleware Client 設定。
-- 在 Server Component 中向 Supabase 查詢資料並呈現的範例。
-- 使用 Server Actions 處理表單提交與 Supabase 資料寫入的範例。
+| `refactor:` | 重構程式碼或架構 |
