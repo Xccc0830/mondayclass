@@ -142,6 +142,8 @@
 
 ## 8. 驗證要求
 
+- 單元與元件測試使用 Vitest、React Testing Library；端對端測試使用 Playwright。執行指令為 `npm test`、`npm run test:watch` 與 `npm run test:e2e`。
+- GitHub Actions 於 Pull Request 及推送至 `main` 時執行 ESLint、TypeScript 型別檢查、單元測試、正式建置及 Playwright Chromium 端對端測試。
 - BMR/TDEE 與營養素換算須涵蓋公式、活動係數、取整、缺少輸入及無效輸入的單元測試。
 - 預約流程須驗證重疊時段、並行預約、改期時段衝突、同意／拒絕後的狀態與行事曆結果。
 - RLS 須驗證學員、教練、管理者的允許與拒絕存取案例，特別是學員健康資料、教練資格文件及管理儀表板。
