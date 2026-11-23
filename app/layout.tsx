@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "mondayclass",
-  description: "健身教練與學員的專業平台",
+  title: "MondayClass 健康檔案",
+  description: "設定健康檔案、每日營養目標與健身目標。",
 };
 
 interface RootLayoutProps {
@@ -12,7 +12,7 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="zh-TW">
+    <html lang="zh-Hant-TW">
       <body>{children}</body>
     </html>
   );

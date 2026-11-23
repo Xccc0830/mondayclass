@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
+const port = 3100;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -9,7 +10,7 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   reporter: isCI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
   },
   projects: [
@@ -19,11 +20,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: isCI
-      ? "npm run start -- --hostname 127.0.0.1"
-      : "npm run dev -- --hostname 127.0.0.1",
-    url: "http://127.0.0.1:3000",
+    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+    url: `http://127.0.0.1:${port}`,
     reuseExistingServer: !isCI,
+    env: {
+      E2E_TEST_MODE: "1",
+      NEXT_PUBLIC_SUPABASE_URL: "",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+    },
     timeout: 120_000,
   },
 });
